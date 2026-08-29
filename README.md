@@ -129,6 +129,11 @@ Sürüm geçmişi: [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
+## Lisans
+
+MIT. Kodu okuyabilir, değiştirebilir ve kendi altyapınızda çalıştırabilirsiniz.
+Ayrıntı: [LICENSE](LICENSE).
+
 ## Sorun giderme
 
 | Belirti | Bakılacak yer |
