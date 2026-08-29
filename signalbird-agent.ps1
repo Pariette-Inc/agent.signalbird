@@ -134,6 +134,7 @@ function Invoke-SbApi {
 
     $headers = @{
         'Authorization' = "Bearer $($script:Conf['token'])"
+        'Accept'        = 'application/json'
         'User-Agent'    = "signalbird-agent/$($script:AgentVersion) (windows)"
     }
 
@@ -153,6 +154,7 @@ function Invoke-SbApi {
         $code = 0
         if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
         $script:LastHttpCode = $code
+        Write-SbLog 'uyari' "istek başarısız: $Path (HTTP $code)"
         if ($code -eq 401 -or $code -eq 403) {
             Stop-SbWithError "Anahtar reddedildi (HTTP $code). Panelden anahtarı yenileyin."
         }
@@ -617,11 +619,17 @@ function Send-SbLogs {
             if ([string]::IsNullOrWhiteSpace($line)) { continue }
             if ($match -and ($line -notmatch $match)) { continue }
             if ($events.Count -ge 100) { break }
+            # Alan sınırları sunucudaki doğrulamayla aynı olmalı (source 120,
+            # message 4000). Aşan bir satır 422 döndürür ve konum ilerlemediği
+            # için aynı satır sonsuza kadar tekrar denenirdi.
+            $src = "$env:COMPUTERNAME`:$path"
+            if ($src.Length -gt 110) { $src = $src.Substring($src.Length - 110) }
+
             $events += @{
                 channel = $channel
                 level   = $level
-                message = if ($line.Length -gt 4000) { $line.Substring(0, 4000) } else { $line }
-                source  = "$env:COMPUTERNAME:$path"
+                message = if ($line.Length -gt 3900) { $line.Substring(0, 3900) } else { $line }
+                source  = $src
                 context = @{ path = $path }
             }
         }
@@ -634,11 +642,20 @@ function Send-SbLogs {
         return
     }
 
+    $script:LastHttpCode = 0
     $resp = Invoke-SbApi -Path '/v1/agent/logs' -Body @{ events = $events }
+
+    # 2xx: gönderildi. 4xx (429 hariç): sunucu bu kaydı kabul etmeyecek, tekrar
+    # denemek akışı sonsuza kadar tıkar — konum yine ilerletilir. Ağ hatası ve
+    # 5xx'te konum durur, bir sonraki turda aynı satırlar yeniden denenir.
+    $code = $script:LastHttpCode
 
     if ($null -ne $resp) {
         foreach ($k in $pending.Keys) { $state[$k] = $pending[$k] }
         Write-SbLog 'bilgi' "$($events.Count) log satırı gönderildi"
+    } elseif ($code -ge 400 -and $code -lt 500 -and $code -ne 429) {
+        foreach ($k in $pending.Keys) { $state[$k] = $pending[$k] }
+        Write-SbLog 'uyari' "log reddedildi (HTTP $code), $($events.Count) satır atlandı"
     } else {
         Write-SbLog 'uyari' 'log gönderilemedi, konum ilerletilmedi'
     }

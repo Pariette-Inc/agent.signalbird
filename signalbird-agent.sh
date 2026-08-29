@@ -218,19 +218,38 @@ sb_load_conf() {
 #  HTTP
 # ─────────────────────────────────────────────────────────────────────────────
 
-# `sb_post <yol> <gövde>` — yanıt gövdesini basar, HTTP kodunu SB_HTTP_CODE'a
-# yazar. Ağ hatası kodu 000 olur.
-SB_HTTP_CODE=0
+# `sb_post <yol> <gövde>` — yanıt gövdesini basar, HTTP kodunu DOSYAYA yazar.
+# Ağ hatası kodu 000 olur.
+#
+# Kod neden değişkende değil dosyada tutuluyor: bu fonksiyon çoğu yerde
+# `resp="$(sb_post …)"` biçiminde, yani KOMUT İKAMESİ içinde çağrılıyor. Komut
+# ikamesi alt kabukta çalışır ve orada yapılan değişken ataması ana kabuğa
+# dönmez; kodu bir değişkene yazdığımızda çağıran taraf her zaman eski değeri
+# (0) okuyordu ve başarılı istekler "başarısız" sayılıyordu.
+sb_http_file() {
+    printf '%s' "${SB_STATE_DIR}/.http_code"
+}
+
+sb_http_code() {
+    cat "$(sb_http_file)" 2>/dev/null || printf '000'
+}
+
+sb_set_http_code() {
+    mkdir -p "$SB_STATE_DIR" 2>/dev/null
+    printf '%s' "${1:-000}" > "$(sb_http_file)" 2>/dev/null
+}
+
 sb_post() {
     local path="$1" body="$2" out code
     out="$(printf '%s' "$body" | curl -sS -m 20 -w '\n%{http_code}' \
         -X POST "${SB_API}${path}" \
         -H "Authorization: Bearer ${SB_TOKEN}" \
         -H "Content-Type: application/json" \
+        -H "Accept: application/json" \
         -H "User-Agent: signalbird-agent/${SB_AGENT_VERSION} (linux)" \
         --data-binary @- 2>/dev/null)"
     code="$(printf '%s' "$out" | tail -n1)"
-    SB_HTTP_CODE="${code:-000}"
+    sb_set_http_code "${code:-000}"
     printf '%s' "$out" | sed '$d'
 }
 
@@ -239,9 +258,10 @@ sb_get() {
     out="$(curl -sS -m 20 -w '\n%{http_code}' \
         "${SB_API}${path}" \
         -H "Authorization: Bearer ${SB_TOKEN}" \
+        -H "Accept: application/json" \
         -H "User-Agent: signalbird-agent/${SB_AGENT_VERSION} (linux)" 2>/dev/null)"
     code="$(printf '%s' "$out" | tail -n1)"
-    SB_HTTP_CODE="${code:-000}"
+    sb_set_http_code "${code:-000}"
     printf '%s' "$out" | sed '$d'
 }
 
@@ -259,12 +279,15 @@ JSON
 )"
     resp="$(sb_post "/v1/agent/hello" "$body")"
 
-    if [ "$SB_HTTP_CODE" = "401" ] || [ "$SB_HTTP_CODE" = "403" ]; then
-        sb_die "Anahtar reddedildi (HTTP $SB_HTTP_CODE). Panelden anahtarı yenileyin."
+    local code
+    code="$(sb_http_code)"
+
+    if [ "$code" = "401" ] || [ "$code" = "403" ]; then
+        sb_die "Anahtar reddedildi (HTTP $code). Panelden anahtarı yenileyin."
     fi
 
-    if [ "$SB_HTTP_CODE" != "200" ]; then
-        sb_log "uyari" "hello başarısız (HTTP $SB_HTTP_CODE), son bilinen ayarla devam"
+    if [ "$code" != "200" ]; then
+        sb_log "uyari" "hello başarısız (HTTP $code), son bilinen ayarla devam"
         sb_load_cached_config
         return 1
     fi
@@ -598,8 +621,12 @@ sb_send_metrics() {
     body="{\"collected_at\":\"$(sb_now)\",\"metrics\":{${parts}}}"
 
     sb_post "/v1/agent/metrics" "$body" >/dev/null
-    if [ "$SB_HTTP_CODE" != "200" ] && [ "$SB_HTTP_CODE" != "202" ]; then
-        sb_log "uyari" "ölçüm gönderilemedi (HTTP $SB_HTTP_CODE)"
+
+    local code
+    code="$(sb_http_code)"
+
+    if [ "$code" != "200" ] && [ "$code" != "202" ]; then
+        sb_log "uyari" "ölçüm gönderilemedi (HTTP $code)"
         return 1
     fi
     return 0
@@ -646,6 +673,15 @@ sb_path_allowed() {
         case "$real" in "$root"/*|"$root") return 0 ;; esac
     done
     return 1
+}
+
+# Gönderimi tamamlanan dosyaların okuma konumunu ilerletir.
+sb_advance_pending() {
+    [ -f "${SB_STATE_DIR}/.pending.$$" ] || return 0
+
+    while IFS='|' read -r k v; do
+        [ -n "$k" ] && sb_state_set "$k" "$v"
+    done < "${SB_STATE_DIR}/.pending.$$"
 }
 
 sb_ship_logs() {
@@ -709,7 +745,16 @@ sb_ship_logs() {
             [ "$count" -ge 100 ] && break
             [ "$first" -eq 0 ] && events="${events},"
             first=0
-            events="${events}{\"channel\":\"$(sb_json_escape "$channel")\",\"level\":\"$(sb_json_escape "$level")\",\"message\":\"$(sb_json_escape "$line")\",\"source\":\"$(sb_json_escape "$(hostname):${path}")\",\"context\":{\"path\":\"$(sb_json_escape "$path")\"}}"
+
+            # Alan sınırları sunucudaki doğrulamayla aynı olmalı (source 120,
+            # message 4000). Aşan bir satır 422 döndürür ve konum ilerlemediği
+            # için AYNI satır sonsuza kadar tekrar denenir: tek uzun yol, tüm
+            # log akışını durdururdu.
+            local src msg
+            src="$(printf '%s' "$(hostname):${path}" | tail -c 110)"
+            msg="$(printf '%s' "$line" | cut -c1-3900)"
+
+            events="${events}{\"channel\":\"$(sb_json_escape "$channel")\",\"level\":\"$(sb_json_escape "$level")\",\"message\":\"$(sb_json_escape "$msg")\",\"source\":\"$(sb_json_escape "$src")\",\"context\":{\"path\":\"$(sb_json_escape "$(printf '%s' "$path" | tail -c 200)")\"}}"
             count=$((count + 1))
         done <<EOF
 $chunk
@@ -729,15 +774,21 @@ EOF
 
     sb_post "/v1/agent/logs" "{\"events\":[${events}]}" >/dev/null
 
-    if [ "$SB_HTTP_CODE" = "200" ] || [ "$SB_HTTP_CODE" = "202" ]; then
-        if [ -f "${SB_STATE_DIR}/.pending.$$" ]; then
-            while IFS='|' read -r k v; do
-                [ -n "$k" ] && sb_state_set "$k" "$v"
-            done < "${SB_STATE_DIR}/.pending.$$"
-        fi
+    local code
+    code="$(sb_http_code)"
+
+    # 2xx: gönderildi. 4xx (429 hariç): sunucu bu kaydı KABUL ETMEYECEK, tekrar
+    # denemek akışı sonsuza kadar tıkar — konum yine ilerletilir ve durum
+    # günlüğe yazılır. Ağ hatası ve 5xx'te konum DURUR, bir sonraki turda
+    # aynı satırlar yeniden denenir.
+    if [ "$code" = "200" ] || [ "$code" = "202" ]; then
+        sb_advance_pending
         sb_log "bilgi" "${count} log satırı gönderildi"
+    elif [ "$code" -ge 400 ] 2>/dev/null && [ "$code" -lt 500 ] 2>/dev/null && [ "$code" != "429" ]; then
+        sb_advance_pending
+        sb_log "uyari" "log reddedildi (HTTP ${code}), ${count} satır atlandı"
     else
-        sb_log "uyari" "log gönderilemedi (HTTP $SB_HTTP_CODE), konum ilerletilmedi"
+        sb_log "uyari" "log gönderilemedi (HTTP ${code}), konum ilerletilmedi"
     fi
 
     rm -f "${SB_STATE_DIR}/.pending.$$" 2>/dev/null
@@ -756,11 +807,14 @@ sb_send_signal() {
     case "$status" in ok|fail) ;; *) status="ok" ;; esac
     sb_post "/v1/agent/signal" \
         "{\"key\":\"$(sb_json_escape "$key")\",\"status\":\"${status}\",\"message\":\"$(sb_json_escape "$message")\"}" >/dev/null
-    if [ "$SB_HTTP_CODE" = "200" ] || [ "$SB_HTTP_CODE" = "202" ]; then
+    local code
+    code="$(sb_http_code)"
+
+    if [ "$code" = "200" ] || [ "$code" = "202" ]; then
         sb_log "bilgi" "sinyal iletildi: ${key} (${status})"
         return 0
     fi
-    sb_log "uyari" "sinyal iletilemedi: ${key} (HTTP $SB_HTTP_CODE)"
+    sb_log "uyari" "sinyal iletilemedi: ${key} (HTTP $code)"
     return 1
 }
 

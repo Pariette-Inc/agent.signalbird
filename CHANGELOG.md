@@ -18,3 +18,14 @@ yayınlandığı anda eski sürümü çalıştıran her sunucunun sahibine bildi
   başarısız olursa konum ilerletilmez.
 - Sinyaller: elle (`signal` komutu) ve dosya tazeliğine bakan otomatik biçim.
 - Panelden ayar çekme, sürüm uyarısı, systemd ve Windows servis kurulumu.
+
+Yayın öncesi canlı denemede düzeltilenler:
+
+- HTTP durum kodu artık dosyada tutuluyor. Değişkende tutulduğunda komut
+  ikamesi (`resp="$(sb_post …)"`) alt kabukta çalıştığı için kod ana kabuğa
+  dönmüyordu: başarılı her istek "başarısız" sayılıyordu.
+- `Accept: application/json` başlığı eklendi. Yokken doğrulama hatası 422
+  yerine 302 yönlendirme olarak dönüyordu.
+- Log alanları sunucunun sınırlarına göre kırpılıyor (`source` 120,
+  `message` 4000) ve 4xx yanıtında konum yine de ilerliyor: tek uzun yol
+  bütün log akışını sonsuza kadar tıkıyordu.

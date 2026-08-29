@@ -43,8 +43,13 @@ Her istek tek bir ajan anahtarı taşır:
 ```
 Authorization: Bearer sba_live_XXXXXXXXXXXXXXXXXXXXXXXX
 Content-Type: application/json
+Accept: application/json
 User-Agent: signalbird-agent/1.0.0 (linux)
 ```
+
+`Accept` başlığı zorunludur ve unutulması sessiz bir hataya yol açar: Laravel,
+JSON istemediğini söyleyen bir istemciye doğrulama hatasını 422 yerine 302
+yönlendirme olarak döner. Ajan o zaman "ne oldu" sorusuna cevap veremez.
 
 Anahtar panelde sunucu kaydı açılırken üretilir, bir kez gösterilir ve
 sunucudaki yerel ayar dosyasına yazılır. Anahtar yalnız bu belgedeki uçlara
@@ -149,6 +154,10 @@ buradan yapar.
 
 Sunucudaki log dosyalarından okunan yeni satırlar. Signalbird bunları Telsiz
 sistemine yazar. Tek istekte en çok 100 kayıt, kayıt başına 4000 karakter.
+
+Alan sınırları sunucudaki doğrulamayla aynıdır ve ajan **kırparak** gönderir:
+`message` en çok 4000, `source` en çok 120 karakter. Sınırı aşan bir satır 422
+döndürür; konum ilerlemeseydi aynı satır sonsuza kadar tekrar denenirdi.
 
 ```json
 {
@@ -335,6 +344,9 @@ Sürüm numarası `VERSION` dosyasında ve iki ajan dosyasının başındaki
 | Durum | Ajanın davranışı |
 | --- | --- |
 | Signalbird'e ulaşılamıyor | Ölçümü atar, log noktasını **ilerletmez**, bir sonraki turda dener. Kuyruk diske yazılmaz: eski ölçümün değeri yoktur, eski logun vardır ve o zaten dosyada durur. |
+| Sunucu 5xx döndü | Ağ hatasıyla aynı: konum durur, tekrar denenir. |
+| Sunucu 4xx döndü (429 hariç) | Log konumu **yine de ilerletilir** ve durum yerel günlüğe yazılır. Sunucunun kabul etmeyeceği bir kaydı sonsuza kadar tekrar göndermek, tek bozuk satır yüzünden tüm log akışını durdurmak olurdu. |
+| 429 (kota/hız sınırı) | Konum durur: kayıt geçerli, yalnız zamanı değil. |
 | Anahtar geçersiz (401) | Döngü durur, yerel loga tek satır hata yazar. Sonsuz döngüde 401 üretmez. |
 | Ayar çekilemedi | En son bilinen ayarla devam eder. İlk açılışta ayar yoksa yalnız `hello` dener. |
 | Log yolu izinli değil | O yolu atlar, panele bir kez bildirir, diğer yollara devam eder. |
