@@ -33,7 +33,7 @@ param(
     [Parameter(Position = 2)][string]$Arg2 = '',
     [Parameter(Position = 3)][string]$Arg3 = '',
     [string]$Token = '',
-    [string]$Api = 'https://api.signalbird.app/api',
+    [string]$Api = 'https://live.signalbird.io/api',
     [string]$Allow = 'C:\inetpub\logs,C:\logs'
 )
 
@@ -45,7 +45,7 @@ $ErrorActionPreference = 'Continue'
 
 # Sürüm. PROTOCOL.md §8: VERSION dosyası ve Linux ajanı ile AYNI olmak
 # zorundadır. Değiştiren kişi üçünü birden değiştirir.
-$script:AgentVersion = '1.0.0'
+$script:AgentVersion = '1.0.1'
 $script:Protocol     = 1
 
 $script:BaseDir   = Join-Path $env:ProgramData 'Signalbird'
@@ -117,8 +117,15 @@ function Read-SbConf {
     if (-not $conf.ContainsKey('token') -or [string]::IsNullOrWhiteSpace($conf['token'])) {
         Stop-SbWithError 'Ayar dosyasında token yok'
     }
+    # 1.0.0 ile kurulan ajanların ayar dosyasında var olmayan bir adres
+    # (api.signalbird.app) yazılı kaldı. Dosyadaki değer varsayılanı ezdiği
+    # için yalnız betiği güncellemek yetmiyor; o adres burada göz ardı edilir.
+    if ($conf.ContainsKey('api_base') -and $conf['api_base'] -like '*signalbird.app*') {
+        Write-SbLog 'uyari' ("Ayar dosyasindaki api_base gecersiz ({0}), https://live.signalbird.io/api kullaniliyor. Kalici duzeltme: signalbird-agent config" -f $conf['api_base'])
+        $conf.Remove('api_base')
+    }
     if (-not $conf.ContainsKey('api_base') -or [string]::IsNullOrWhiteSpace($conf['api_base'])) {
-        $conf['api_base'] = 'https://api.signalbird.app/api'
+        $conf['api_base'] = 'https://live.signalbird.io/api'
     }
     if (-not $conf.ContainsKey('allow_paths')) { $conf['allow_paths'] = 'C:\inetpub\logs,C:\logs' }
 

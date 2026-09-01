@@ -35,7 +35,7 @@ set -o pipefail
 
 # Sürüm. PROTOCOL.md §8: bu değer VERSION dosyasıyla ve PowerShell ajanıyla
 # AYNI olmak zorundadır. Değiştiren kişi üçünü birden değiştirir.
-SB_AGENT_VERSION="1.0.0"
+SB_AGENT_VERSION="1.0.1"
 
 # Protokol sürümü. Sunucu tarafı gövdeyi buna göre yorumlar.
 SB_PROTOCOL=1
@@ -48,7 +48,7 @@ SB_LOG="/var/log/signalbird-agent.log"
 SB_SERVICE="/etc/systemd/system/signalbird-agent.service"
 SB_BIN="/usr/local/bin/signalbird-agent"
 
-SB_DEFAULT_API="https://api.signalbird.app/api"
+SB_DEFAULT_API="https://live.signalbird.io/api"
 SB_DEFAULT_ALLOW="/var/log"
 
 # Ayar çekilemediğinde kullanılan değerler.
@@ -202,6 +202,15 @@ sb_load_conf() {
     done < "$SB_CONF"
 
     [ -n "$SB_TOKEN" ] || sb_die "Ayar dosyasında token yok"
+    # 1.0.0 ile kurulan ajanların ayar dosyasında var olmayan bir adres
+    # (api.signalbird.app) yazılı kaldı. Dosyadaki değer varsayılanı ezdiği
+    # için yalnız betiği güncellemek yetmiyor; o adres burada göz ardı edilir.
+    case "$SB_API" in
+        *signalbird.app*)
+            sb_log "uyari" "Ayar dosyasındaki api_base geçersiz ($SB_API), $SB_DEFAULT_API kullanılıyor. Kalıcı düzeltme: signalbird-agent config"
+            SB_API=""
+            ;;
+    esac
     [ -n "$SB_API" ] || SB_API="$SB_DEFAULT_API"
     [ -n "$SB_ALLOW_PATHS" ] || SB_ALLOW_PATHS="$SB_DEFAULT_ALLOW"
 

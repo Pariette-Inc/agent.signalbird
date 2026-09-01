@@ -4,6 +4,22 @@ Bu dosyadaki her satır, Signalbird tarafında bir sürüm kaydına karşılık 
 Sürüm kaydı girilmeden değişiklik yayınlanmış sayılmaz (PROTOCOL.md §8):
 yayınlandığı anda eski sürümü çalıştıran her sunucunun sahibine bildirim gider.
 
+## 1.0.1 (1 Eylül 2026)
+
+Varsayılan API adresi düzeltildi.
+
+- Ajanlar var olmayan `https://api.signalbird.app/api` adresini varsayılan
+  alıyordu; gerçek uç `https://live.signalbird.io/api`. Şirket alan adı
+  `signalbird.io`, `signalbird.app` diye bir uç hiç olmadı.
+- 1.0.0 kurulumları bu adresi yerel ayar dosyasına (`agent.conf`,
+  `api_base=`) yazdığı ve dosyadaki değer varsayılanı ezdiği için, yalnız
+  betiği güncellemek yetmiyordu. Ayar dosyasında `signalbird.app` geçen bir
+  `api_base` artık göz ardı ediliyor, günlüğe uyarı düşüyor ve yeni
+  varsayılan kullanılıyor. Değeri dosyada da kalıcı düzeltmek için
+  `signalbird-agent config` çalıştırın.
+- PROTOCOL.md'deki taban adres, örnek ayar dosyası ve `notes_url`
+  (`https://signalbird.io/agent/changelog`) güncellendi.
+
 ## 1.0.0 (30 Ağustos 2026)
 
 İlk sürüm.

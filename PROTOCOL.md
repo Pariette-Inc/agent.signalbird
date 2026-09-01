@@ -64,7 +64,7 @@ anahtar o anda ölür.
 ## 3. Uçlar
 
 Taban adres yerel ayardaki `api_base` değeridir (varsayılan
-`https://api.signalbird.app/api`).
+`https://live.signalbird.io/api`).
 
 ### 3.1 `POST /v1/agent/hello`
 
@@ -97,7 +97,7 @@ Yanıt:
   "release": {
     "version": "1.1.0",
     "is_outdated": true,
-    "notes_url": "https://signalbird.app/agent/changelog",
+    "notes_url": "https://signalbird.io/agent/changelog",
     "download_url": "https://raw.githubusercontent.com/Pariette-Inc/agent.signalbird/main/signalbird-agent.sh",
     "sha256": "…"
   }
@@ -255,7 +255,7 @@ Windows: `C:\ProgramData\Signalbird\agent.conf`
 ```ini
 # Signalbird ajan yerel ayarı. Bu dosya sunucudan dışarı çıkmaz.
 token=sba_live_XXXXXXXXXXXXXXXXXXXX
-api_base=https://api.signalbird.app/api
+api_base=https://live.signalbird.io/api
 
 # Panelden seçilen log yolları YALNIZ bu köklerin altındaysa okunur.
 allow_paths=/var/log
@@ -268,6 +268,12 @@ db_user=signalbird_ro
 db_pass=...
 db_name=penyu
 ```
+
+Dosyadaki `api_base` varsayılanı ezer. 1.0.0 kurulumlarında buraya var
+olmayan bir adres (`api.signalbird.app`) yazıldığı için, 1.0.1'den itibaren
+`signalbird.app` geçen bir `api_base` göz ardı edilir: günlüğe uyarı düşer ve
+`https://live.signalbird.io/api` kullanılır. Dosyayı kalıcı düzeltmek için
+`signalbird-agent config` çalıştırılır.
 
 Veritabanı kullanıcısının **salt okunur** olması beklenir. Ajan yalnız durum
 sorgusu çalıştırır (§7), ama en küçük yetki ilkesi burada da geçerlidir.
