@@ -227,7 +227,7 @@ sb_load_conf() {
 #  HTTP
 # ─────────────────────────────────────────────────────────────────────────────
 
-# `sb_post <yol> <gövde>` — yanıt gövdesini basar, HTTP kodunu DOSYAYA yazar.
+# `sb_post <yol> <gövde>` - yanıt gövdesini basar, HTTP kodunu DOSYAYA yazar.
 # Ağ hatası kodu 000 olur.
 #
 # Kod neden değişkende değil dosyada tutuluyor: bu fonksiyon çoğu yerde
@@ -787,7 +787,7 @@ EOF
     code="$(sb_http_code)"
 
     # 2xx: gönderildi. 4xx (429 hariç): sunucu bu kaydı KABUL ETMEYECEK, tekrar
-    # denemek akışı sonsuza kadar tıkar — konum yine ilerletilir ve durum
+    # denemek akışı sonsuza kadar tıkar - konum yine ilerletilir ve durum
     # günlüğe yazılır. Ağ hatası ve 5xx'te konum DURUR, bir sonraki turda
     # aynı satırlar yeniden denenir.
     if [ "$code" = "200" ] || [ "$code" = "202" ]; then

@@ -653,7 +653,7 @@ function Send-SbLogs {
     $resp = Invoke-SbApi -Path '/v1/agent/logs' -Body @{ events = $events }
 
     # 2xx: gönderildi. 4xx (429 hariç): sunucu bu kaydı kabul etmeyecek, tekrar
-    # denemek akışı sonsuza kadar tıkar — konum yine ilerletilir. Ağ hatası ve
+    # denemek akışı sonsuza kadar tıkar - konum yine ilerletilir. Ağ hatası ve
     # 5xx'te konum durur, bir sonraki turda aynı satırlar yeniden denenir.
     $code = $script:LastHttpCode
 
